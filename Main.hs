@@ -46,6 +46,9 @@ LoggingOrville $ Orville.selectSql
 -}
 runLoggedQuery :: App String IO ()
 runLoggedQuery = do
+  -- NOTE, haddocks since Orville is not in hackage
+  -- https://taylor.fausak.me/orville/Database-Orville-Core.html#v:withTransaction
+  -- https://taylor.fausak.me/orville/Database-Orville-Core.html#t:MonadOrville
   Reader.void . _whatGoesHere . Orville.withTransaction @Postgres.Connection . LoggingOrville $ Orville.selectSql
     ""
     []

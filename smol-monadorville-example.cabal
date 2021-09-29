@@ -1,0 +1,26 @@
+cabal-version:       >=1.10
+-- Initial package description 'smol-monadorville-example.cabal' generated
+-- by 'cabal init'.  For further documentation, see
+-- http://haskell.org/cabal/users-guide/
+
+name:                smol-monadorville-example
+version:             0.1.0.0
+-- synopsis:
+-- description:
+-- bug-reports:
+-- license:
+license-file:        LICENSE
+author:              codygman
+maintainer:          cody@codygman.dev
+-- copyright:
+-- category:
+build-type:          Simple
+extra-source-files:  CHANGELOG.md
+
+executable smol-monadorville-example
+  main-is:             Main.hs
+  -- other-modules:
+  default-extensions: GeneralizedNewtypeDeriving, UndecidableInstances, FlexibleInstances, MultiParamTypeClasses, TypeApplications
+  build-depends:       base >=4.14 && <4.15, orville, mtl, monad-control, resourcet, transformers-base, HDBC-postgresql
+  -- hs-source-dirs:
+  default-language:    Haskell2010

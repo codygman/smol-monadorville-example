@@ -33,7 +33,7 @@ newtype App context m a =
   )
 
 newtype LoggingOrville c m a =
-  LoggingOrville { runLoggingOrville :: Orville.OrvilleT c m a }
+  LoggingOrville { runLoggingOrville :: m a }
   deriving (Applicative
            , Monad
            , Functor
@@ -41,78 +41,64 @@ newtype LoggingOrville c m a =
            , Reader.MonadIO
            , Base.MonadBase b
            , Control.MonadBaseControl b
+           , Resource.MonadThrow
            )
 
 -- https://taylor.fausak.me/orville/Database-Orville-Core.html#t:MonadOrville
-instance (Monad m, Reader.MonadIO (LoggingOrville Postgres.Connection m), Control.MonadBaseControl IO (LoggingOrville Postgres.Connection m)) => Orville.MonadOrville Postgres.Connection (LoggingOrville Postgres.Connection m) where
-  getOrvilleEnv = Orville.getOrvilleEnv
+-- I can provide instance for my App monad
+instance (HDBC.IConnection conn, Orville.MonadOrville conn m) => Orville.MonadOrville Postgres.Connection (App String m) where
+  getOrvilleEnv = do
+    dbPool  <- Reader.liftIO $ Pool.createPool (Postgres.connectPostgreSQL "postgresql://postgres@localhost:5432" ) (HDBC.disconnect) 1 60 1
+    let env = Orville.newOrvilleEnv dbPool
+    pure env
+  localOrvilleEnv f =
+    App
+      . Reader.local
+          (\localEnv -> localEnv)
+      . runApp
   runningQuery _ sql query = do
-    Reader.liftIO $ putStrLn sql -- LoggingOrville should print the query ran out to console
+    Reader.liftIO $ putStrLn sql
     query
 
-runNormalQuery :: App String IO [String]
-runNormalQuery = do
-  dbPool  <- Reader.liftIO $ Pool.createPool (Postgres.connectPostgreSQL "postgresql://postgres@localhost:5432" ) (HDBC.disconnect) 1 60 1
-  Reader.liftIO $ putStrLn "pool created"
-  let env = Orville.newOrvilleEnv dbPool
-  Reader.liftIO $  putStrLn "env created"
-  flip Orville.runOrville env $ do
+instance (Reader.MonadIO m, Resource.MonadThrow m, Control.MonadBaseControl IO m) => Orville.MonadOrville Postgres.Connection (LoggingOrville Postgres.Connection (App String m)) where
+  getOrvilleEnv = do
+    dbPool  <- Reader.liftIO $ Pool.createPool (Postgres.connectPostgreSQL "postgresql://postgres@localhost:5432" ) (HDBC.disconnect) 1 60 1
+    let env = Orville.newOrvilleEnv dbPool
+    pure env
+  localOrvilleEnv f = id -- not sure why below doesn't work
+    -- LoggingOrville
+    --   . Reader.local
+    --       (\localEnv -> localEnv)
+    --   . runLoggingOrville
+  runningQuery _ sql query = do
+    error "hi"
+    Reader.liftIO $ putStrLn sql
+    query
+
+runLoggingQuery :: (MonadFail m, Resource.MonadThrow m, Reader.MonadIO m, HDBC.IConnection conn, Orville.MonadOrville conn m) =>  LoggingOrville Postgres.Connection m [String]
+runLoggingQuery = do
+  LoggingOrville $ do
     Orville.selectSql @String
-      "select aggnumdirectargs from pg_catalog.pg_aggregate pa limit 1;"
+      "select aggnumdirectargs from pg_catalog.pg_aggregate pa limit 2;"
       []
       (Orville.col @Text.Text "aggnumdirectargs")
 
-runLoggedQuery :: App String IO [String]
-runLoggedQuery = do
-  dbPool  <- Reader.liftIO $ Pool.createPool (Postgres.connectPostgreSQL "postgresql://postgres@localhost:5432" ) (HDBC.disconnect) 1 60 1
-  Reader.liftIO $ putStrLn "pool created"
-  let env = Orville.newOrvilleEnv dbPool
-  Reader.liftIO $  putStrLn "env created"
-
-  -- This freezes... nested transactions?
-  -- core of problem is how to do:
-  -- _ :: LoggingOrville Postgres.Connection IO [String] -> App String IO [String]
-  -- I just want the base IO monad to be used... right? But I want the LoggingOrville `runningQuery` called
-  _ . Orville.withTransaction @Postgres.Connection @(LoggingOrville (Postgres.Connection) IO) $ LoggingOrville $ do
-        Orville.selectSql @String
-          "select aggnumdirectargs from pg_catalog.pg_aggregate pa limit 1;"
-          []
-          (Orville.col @Text.Text "aggnumdirectargs")
-
-  -- new attempt
-  -- This doesn't even run?
-  -- flip Orville.runOrville env . runLoggingOrville . Orville.withTransaction $ newApproach
+runNormalQuery :: (MonadFail m, Resource.MonadThrow m, Reader.MonadIO m, HDBC.IConnection conn, Orville.MonadOrville conn m) =>  App String m [String]
+runNormalQuery = do
+  App $ do
+    Orville.selectSql @String
+      "select aggnumdirectargs from pg_catalog.pg_aggregate pa limit 2;"
+      []
+      (Orville.col @Text.Text "aggnumdirectargs")
 
 main :: IO ()
 main = do
+  dbPool  <- Reader.liftIO $ Pool.createPool (Postgres.connectPostgreSQL "postgresql://postgres@localhost:5432" ) (HDBC.disconnect) 1 60 1
+  Reader.liftIO $ putStrLn "pool created"
+  let env = Orville.newOrvilleEnv dbPool
+  -- print =<< Reader.runReaderT ((flip Orville.runOrville env) . runApp runNormalQuery) (EnvironmentWith "tst")
+  Reader.liftIO $  putStrLn "env created"
 
-  putStrLn "start"
-  print =<< (Reader.runReaderT @_ @IO @_) (runApp runNormalQuery) (EnvironmentWith "tst")
-  putStrLn "done"
+  print @[String] =<< (flip Orville.runOrville env . flip Reader.runReaderT (EnvironmentWith "") . runApp) (Orville.withTransaction runNormalQuery)
 
-  putStrLn "start"
-  -- print =<< (Reader.runReaderT @_ @IO @_) (runApp runLoggedQuery) (EnvironmentWith "tst")
-  putStrLn "done"
-
-  -- Reader.void $ Reader.runReaderT (runApp trivialAppMonadUsage) (EnvironmentWith "something")
-
-
-
-
-
--- other stuff I tried
-
--- sanity check
-trivialAppMonadUsage :: App String IO ()
-trivialAppMonadUsage = do
-  x :: String <- App . Reader.asks $ environmentContext
-  Reader.liftIO $ putStrLn x
-
-
--- try it backwards basically... pretty sure it's not right (also freezes)
-newApproach :: LoggingOrville Postgres.Connection (App String IO) [String]
-newApproach = Orville.withTransaction @Postgres.Connection @(LoggingOrville (Postgres.Connection) _) $ LoggingOrville $ do
-  Orville.selectSql @String
-          "select aggnumdirectargs from pg_catalog.pg_aggregate pa limit 1;"
-          []
-          (Orville.col @Text.Text "aggnumdirectargs")
+  print @[String] =<< (flip Orville.runOrville env . flip Reader.runReaderT (EnvironmentWith ("" :: String)) . runApp . runLoggingOrville) (Orville.withTransaction runLoggingQuery)

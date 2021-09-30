@@ -19,9 +19,9 @@ data EnvironmentWith context = EnvironmentWith
   { environmentContext :: context
   }
 
-newtype App context m a = App {
-  runApp :: Reader.ReaderT (EnvironmentWith context) m a
-  } deriving
+newtype App context m a =
+  App { runApp :: Reader.ReaderT (EnvironmentWith context) m a }
+  deriving
   ( Applicative
   , Functor
   , Monad
@@ -32,13 +32,22 @@ newtype App context m a = App {
   , Resource.MonadThrow
   )
 
-newtype LoggingOrville c m a = LoggingOrville { runLoggingOrville :: Orville.OrvilleT c m a } deriving (Applicative, Monad, Functor, MonadFail, Reader.MonadIO, Base.MonadBase b, Control.MonadBaseControl b)
+newtype LoggingOrville c m a =
+  LoggingOrville { runLoggingOrville :: Orville.OrvilleT c m a }
+  deriving (Applicative
+           , Monad
+           , Functor
+           , MonadFail
+           , Reader.MonadIO
+           , Base.MonadBase b
+           , Control.MonadBaseControl b
+           )
 
 -- https://taylor.fausak.me/orville/Database-Orville-Core.html#t:MonadOrville
 instance (Monad m, Reader.MonadIO (LoggingOrville Postgres.Connection m), Control.MonadBaseControl IO (LoggingOrville Postgres.Connection m)) => Orville.MonadOrville Postgres.Connection (LoggingOrville Postgres.Connection m) where
   getOrvilleEnv = Orville.getOrvilleEnv
   runningQuery _ sql query = do
-    Reader.liftIO $ putStrLn sql
+    Reader.liftIO $ putStrLn sql -- LoggingOrville should print the query ran out to console
     query
 
 runNormalQuery :: App String IO [String]

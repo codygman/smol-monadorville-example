@@ -42,7 +42,7 @@ instance (Monad m, Reader.MonadIO (LoggingOrville Postgres.Connection m), Contro
     query
 
 runNormalQuery :: App String IO [String]
-'brunNormalQuery = do
+runNormalQuery = do
   dbPool  <- Reader.liftIO $ Pool.createPool (Postgres.connectPostgreSQL "postgresql://postgres@localhost:5432" ) (HDBC.disconnect) 1 60 1
   Reader.liftIO $ putStrLn "pool created"
   let env = Orville.newOrvilleEnv dbPool

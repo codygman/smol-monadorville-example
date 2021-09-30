@@ -29,8 +29,8 @@ newtype App dbPool m a =
   , MonadTrans
   )
 
-newtype LoggingOrville m a =
-  LoggingOrville { runLoggingOrville :: m a }
+newtype AppDebugSql m a =
+  AppDebugSql { runAppDebugSql :: m a }
   deriving (Applicative
            , Monad
            , Functor
@@ -49,13 +49,25 @@ instance MonadOrville HDBC.Connection (App (Pool HDBC.Connection) IO) where
                     . local id -- is this fine?
                     . runApp
 
--- Is this what I need to write/somehow use?
-instance MonadOrville HDBC.Connection (App (Pool HDBC.Connection) (CustomMonad IO)) where
+{-
+question: I have a working App monad using the ReaderT design pattern. Right now it works with a database library called Orville and (I'm pretty sure) uses the base Monad IO whose `runningQuery` function does not print out the sql query run. My custom Monad is simply called `AppDebugSql`, which of these instance heads look right for using it if any for `class MonadOrville conn m`:
+
+1) (App (Pool HDBC.Connection) (AppDebugSql IO))
+2) AppDebugSql (App (Pool HDBC.Connection) IO)
+
+shortened version of question:
+
+Using the ReaderT design pattern should Monads you want to behave differently in your `AppM` be the base monad or use your `AppM` as a base monad in instance heads? Assuming we have a `AppM ReaderT c m a` and a variant `AppMDebug m a` that has slightly different typeclass instances  which is correct 1) AppM (ReaderT c (AppMDebug IO)) 2) AppMDebug (AppM (ReaderT c m)). Here is a longer version of this question with specifics that is compiling and running (but not logging):
+
+-}
+
+-- Is this what I need to write/somehow use? Is this the right approach to specify my own `runningQuery` for `AppDebugSql`?
+instance MonadOrville HDBC.Connection (App (Pool HDBC.Connection) (AppDebugSql IO)) where
 
 -- https://taylor.fausak.me/orville/Database-Orville-Core.html#t:MonadOrville
-loggingOrvilleExSelect :: (MonadFail m, Resource.MonadThrow m, MonadIO m, HDBC.IConnection conn, MonadOrville conn m) =>  LoggingOrville m [String]
+loggingOrvilleExSelect :: (MonadFail m, Resource.MonadThrow m, MonadIO m, HDBC.IConnection conn, MonadOrville conn m) =>  AppDebugSql m [String]
 loggingOrvilleExSelect = do
-  LoggingOrville $ do
+  AppDebugSql $ do
     selectSql @String
       "select aggnumdirectargs from pg_catalog.pg_aggregate pa limit 2;"
       []
@@ -65,9 +77,9 @@ main :: IO ()
 main = do
   dbPool  <- liftIO $ createPool (HDBC.connectPostgreSQL  "postgresql://postgres@localhost:5432" ) HDBC.disconnect 1 60 1
   liftIO $ putStrLn "pool created"
-  -- why does this small transformer stack use IO in my `loggingOrvilleExSelect` function and how can I make a custom instance for LoggingOrville that prints out the sql in `runningQuery`?
+  -- why does this small transformer stack use IO in my `loggingOrvilleExSelect` function and how can I make a custom instance for AppDebugSql that prints out the sql in `runningQuery`?
 
-  print @[String] =<< (flip runReaderT dbPool . runApp . runLoggingOrville $ do
+  print @[String] =<< (flip runReaderT dbPool . runApp . runAppDebugSql $ do
                            loggingOrvilleExSelect)
 
 -- experiments farther below if interested
@@ -89,8 +101,8 @@ main = do
 
 
   -- 1.
-  -- print @[String] =<< (flip runReaderT dbPool . runApp . runLoggingOrville $ do
-  --                         -- _1 :: LoggingOrville (App (Pool HDBC.Connection) IO) [String]
+  -- print @[String] =<< (flip runReaderT dbPool . runApp . runAppDebugSql $ do
+  --                         -- _1 :: AppDebugSql (App (Pool HDBC.Connection) IO) [String]
   --                          _1)
 
   -- 2.

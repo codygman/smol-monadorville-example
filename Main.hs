@@ -57,7 +57,6 @@ instance (HDBC.IConnection conn, Orville.MonadOrville conn m) => Orville.MonadOr
           (\localEnv -> localEnv)
       . runApp
   runningQuery _ sql query = do
-    Reader.liftIO $ putStrLn sql
     query
 
 instance (Reader.MonadIO m, Resource.MonadThrow m, Control.MonadBaseControl IO m) => Orville.MonadOrville Postgres.Connection (LoggingOrville Postgres.Connection (App String m)) where
@@ -96,9 +95,12 @@ main = do
   dbPool  <- Reader.liftIO $ Pool.createPool (Postgres.connectPostgreSQL "postgresql://postgres@localhost:5432" ) (HDBC.disconnect) 1 60 1
   Reader.liftIO $ putStrLn "pool created"
   let env = Orville.newOrvilleEnv dbPool
-  -- print =<< Reader.runReaderT ((flip Orville.runOrville env) . runApp runNormalQuery) (EnvironmentWith "tst")
+  --  print =<< Reader.runReaderT ((flip Orville.runOrville env) . runApp runNormalQuery) (EnvironmentWith "tst")
   Reader.liftIO $  putStrLn "env created"
 
+   -- ugh this one is using the default implementation :/
   print @[String] =<< (flip Orville.runOrville env . flip Reader.runReaderT (EnvironmentWith "") . runApp) (Orville.withTransaction runNormalQuery)
 
+  -- This one is using the one that isn't supposed to be logging
+  -- so it worked by accident
   print @[String] =<< (flip Orville.runOrville env . flip Reader.runReaderT (EnvironmentWith ("" :: String)) . runApp . runLoggingOrville) (Orville.withTransaction runLoggingQuery)

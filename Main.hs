@@ -12,7 +12,9 @@ data EnvironmentWith context = EnvironmentWith
   { environmentContext :: context
   }
 
-newtype App context m a = UrzaT (Reader.ReaderT (EnvironmentWith context) m a) deriving
+newtype App context m a = App {
+  runApp :: Reader.ReaderT (EnvironmentWith context) m a
+  } deriving
   ( Applicative
   , Functor
   , Monad

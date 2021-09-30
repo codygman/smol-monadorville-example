@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-unused-imports -fno-warn-missing-methods #-}
 module Main where
 
+import qualified Control.Monad.Trans.Class as Trans
 import qualified Database.Orville              as Orville
 import qualified Database.Orville.Raw          as Orville
 import qualified Control.Monad.Reader          as Reader

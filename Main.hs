@@ -41,10 +41,16 @@ newtype LoggingOrville m a =
            , Resource.MonadThrow
            )
 
-instance MonadOrville HDBC.Connection (LoggingOrville (App HDBC.Connection IO)) where
-    getOrvilleEnv = error "implement getOrvilleEnv"
-    localOrvilleEnv f = error "implement localOrvilleEnv"
-    runningQuery _ sql query = error "implement runningQuery"
+-- This is my App's instance of MonadOrville
+instance MonadOrville HDBC.Connection (App (Pool HDBC.Connection) IO) where
+  getOrvilleEnv = newOrvilleEnv <$> App ask
+  runningQuery _ _ query = query -- error "implement runningQuery"
+  localOrvilleEnv f = App
+                    . local id -- is this fine?
+                    . runApp
+
+-- Is this what I need to write/somehow use?
+instance MonadOrville HDBC.Connection (App (Pool HDBC.Connection) (CustomMonad IO)) where
 
 -- https://taylor.fausak.me/orville/Database-Orville-Core.html#t:MonadOrville
 loggingOrvilleExSelect :: (MonadFail m, Resource.MonadThrow m, MonadIO m, HDBC.IConnection conn, MonadOrville conn m) =>  LoggingOrville m [String]
@@ -55,12 +61,50 @@ loggingOrvilleExSelect = do
       []
       (col @Text.Text "aggnumdirectargs")
 
-loggingAppExSelect :: (LoggingOrville (App (Pool HDBC.Connection) IO)) [String]
-loggingAppExSelect = loggingAppExSelect
-
 main :: IO ()
 main = do
   dbPool  <- liftIO $ createPool (HDBC.connectPostgreSQL  "postgresql://postgres@localhost:5432" ) HDBC.disconnect 1 60 1
   liftIO $ putStrLn "pool created"
-  print @[String] =<< (flip runReaderT dbPool . runApp $ do
-    runLoggingOrville loggingAppExSelect)
+  -- why does this small transformer stack use IO in my `loggingOrvilleExSelect` function and how can I make a custom instance for LoggingOrville that prints out the sql in `runningQuery`?
+
+  print @[String] =<< (flip runReaderT dbPool . runApp . runLoggingOrville $ do
+                           loggingOrvilleExSelect)
+
+-- experiments farther below if interested
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  -- 1.
+  -- print @[String] =<< (flip runReaderT dbPool . runApp . runLoggingOrville $ do
+  --                         -- _1 :: LoggingOrville (App (Pool HDBC.Connection) IO) [String]
+  --                          _1)
+
+  -- 2.
+  -- print @[String] =<< (flip runReaderT dbPool . runApp $ do
+  --                         -- _2 :: _ :: App (Pool HDBC.Connection) IO [String]
+  --                          _2)
+
+  -- 3.
+  -- print @[String] =<< (flip runReaderT dbPool $ do
+  --                         -- _3 :: ReaderT (Pool HDBC.Connection) IO [String]
+  --                          _3)
+
+  -- what does lift do for these?
+  -- print @[String] =<< (flip runReaderT dbPool . lift $ do
+  --                         -- _4 :: IO [String]
+  --                          _4
+  --                    )

@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-unused-imports -fno-warn-missing-methods #-}
 module Main where
 
 import qualified Database.Orville              as Orville

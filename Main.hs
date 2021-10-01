@@ -49,13 +49,10 @@ instance MonadOrville HDBC.Connection (App (Pool HDBC.Connection) IO) where
   localOrvilleEnv f = App . local id . runApp
 
 -- instance 2
-instance MonadOrville HDBC.Connection (App (Pool HDBC.Connection) (AppDebugSql IO)) where
-  getOrvilleEnv = newOrvilleEnv <$> App ask
-  runningQuery _ _ query = do
-    liftIO $ putStrLn "instance 2"
-    query
-  localOrvilleEnv f = App . local id . runApp
+-- NOTE my previous WRONG understanding was that `AppDebugSql` should act as the base monad and that the instead head below would be selected in `main :: IO` with `void . flip runReaderT dbPool .  runApp . runAppDebugSql $ loggingOrvilleExSelect`
+-- instance MonadOrville HDBC.Connection (App (Pool HDBC.Connection) (AppDebugSql IO)) where
 
+-- instance 3
 instance MonadOrville HDBC.Connection (AppDebugSql (App (Pool HDBC.Connection) IO)) where
   getOrvilleEnv = AppDebugSql $ do
     getOrvilleEnv

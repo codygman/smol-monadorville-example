@@ -36,6 +36,8 @@ newtype AppDebugSql m a =
            , MonadIO
            , MonadBase b
            , MonadBaseControl b
+           , MonadFail
+           , MonadThrow
            )
 
 -- instance 1
@@ -54,15 +56,22 @@ instance MonadOrville HDBC.Connection (App (Pool HDBC.Connection) (AppDebugSql I
     query
   localOrvilleEnv f = App . local id . runApp
 
+instance MonadOrville HDBC.Connection (AppDebugSql (App (Pool HDBC.Connection) IO)) where
+  getOrvilleEnv = AppDebugSql $ do
+    getOrvilleEnv
+  runningQuery _ _ query = do
+    liftIO $ putStrLn "instance 3"
+    query
+  localOrvilleEnv f = AppDebugSql . App . local id . runApp . runAppDebugSql
+
 main :: IO ()
 main = do
   dbPool  <- liftIO $ createPool (HDBC.connectPostgreSQL  "postgresql://postgres@localhost:5432" ) HDBC.disconnect 1 60 1
   void . flip runReaderT dbPool .  runApp . runAppDebugSql $ do
     loggingOrvilleExSelect
 
-loggingOrvilleExSelect :: (MonadFail m, Resource.MonadThrow m, MonadIO m, HDBC.IConnection conn, MonadOrville conn m) =>  AppDebugSql m [String]
+loggingOrvilleExSelect :: AppDebugSql (App (Pool HDBC.Connection) IO) [String]
 loggingOrvilleExSelect = do
-  AppDebugSql $ do
     selectSql @String
       "select aggnumdirectargs from pg_catalog.pg_aggregate pa limit 2;"
       []

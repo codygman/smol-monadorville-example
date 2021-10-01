@@ -68,15 +68,18 @@ main = do
   putStrLn "1. non-logging"
   void . flip runReaderT dbPool .  runApp  $
     orvilleExSelect
+  putStrLn ""
 
   putStrLn "2. logging"
   void . flip runReaderT dbPool .  runApp . runAppDebugSql $
     loggingOrvilleExSelect
+  putStrLn ""
 
   -- This one is surprising to me
-  putStrLn "3. think I can \"wrap\" App (Pool ...) IO [String] to change typeclass selected and get logging behavior"
-  void . flip runReaderT dbPool .  runApp  . runAppDebugSql . AppDebugSql $ do
+  putStrLn "3. think I can \"wrap\" App (Pool ...) IO [String] to change typeclass selected and get logging behavior. I expected `instance 3` but it used the default MonadOrville instance"
+  void . flip runReaderT dbPool .  runApp  . runAppDebugSql . pure $ do
     orvilleExSelect
+  putStrLn ""
 
   putStrLn "4. inline selectSql call, use runApp to select non-logging MonadOrville instance"
   void . flip runReaderT dbPool .  runApp $ do
@@ -84,13 +87,15 @@ main = do
       "select aggnumdirectargs from pg_catalog.pg_aggregate pa limit 2;"
       []
       (col @Text.Text "aggnumdirectargs")
+  putStrLn ""
 
-  putStrLn "4. inline selectSql call, use runApp to select logging MonadOrville instance"
+  putStrLn "5. inline selectSql call, use runApp to select logging MonadOrville instance"
   void . flip runReaderT dbPool .  runApp . runAppDebugSql $ do
     selectSql @String
       "select aggnumdirectargs from pg_catalog.pg_aggregate pa limit 2;"
       []
       (col @Text.Text "aggnumdirectargs")
+  putStrLn ""
 
 loggingOrvilleExSelect :: AppDebugSql (App (Pool HDBC.Connection) IO) [String]
 loggingOrvilleExSelect = do
@@ -105,3 +110,23 @@ orvilleExSelect = do
       "select aggnumdirectargs from pg_catalog.pg_aggregate pa limit 2;"
       []
       (col @Text.Text "aggnumdirectargs")
+
+-- sample output of this revision:
+{-
+1. non-logging
+instance 1
+
+2. logging
+instance 3
+
+3. think I can "wrap" App (Pool ...) IO [String] to change typeclass selected and get logging behavior. I expected `instance 3` but it used the default MonadOrville instance
+
+4. inline selectSql call, use runApp to select non-logging MonadOrville instance
+instance 1
+
+5. inline selectSql call, use runApp to select logging MonadOrville instance
+instance 3
+
+
+...done
+-}

@@ -29,6 +29,7 @@ newtype App dbPool m a =
   , MonadTrans
   )
 
+
 newtype AppDebugSql m a =
   AppDebugSql { runAppDebugSql :: m a }
   deriving (Applicative
@@ -44,7 +45,7 @@ newtype AppDebugSql m a =
 -- This is my App's instance of MonadOrville
 instance MonadOrville HDBC.Connection (App (Pool HDBC.Connection) IO) where
   getOrvilleEnv = newOrvilleEnv <$> App ask
-  runningQuery _ _ query = query -- error "implement runningQuery"
+  runningQuery _ _ query = error "implement runningQuery"
   localOrvilleEnv f = App
                     . local id -- is this fine?
                     . runApp
@@ -63,6 +64,7 @@ Using the ReaderT design pattern should Monads you want to behave differently in
 
 -- Is this what I need to write/somehow use? Is this the right approach to specify my own `runningQuery` for `AppDebugSql`?
 instance MonadOrville HDBC.Connection (App (Pool HDBC.Connection) (AppDebugSql IO)) where
+  getOrvilleEnv = error "1"
 
 -- https://taylor.fausak.me/orville/Database-Orville-Core.html#t:MonadOrville
 loggingOrvilleExSelect :: (MonadFail m, Resource.MonadThrow m, MonadIO m, HDBC.IConnection conn, MonadOrville conn m) =>  AppDebugSql m [String]
@@ -73,14 +75,21 @@ loggingOrvilleExSelect = do
       []
       (col @Text.Text "aggnumdirectargs")
 
+
+-- f :: (MonadFail m, Resource.MonadThrow m, MonadIO m, HDBC.IConnection conn, MonadOrville conn m) =>  _ -> AppDebugSql m [String] -> IO [String]
+-- f dbPool = runOrville
+
 main :: IO ()
 main = do
   dbPool  <- liftIO $ createPool (HDBC.connectPostgreSQL  "postgresql://postgres@localhost:5432" ) HDBC.disconnect 1 60 1
   liftIO $ putStrLn "pool created"
   -- why does this small transformer stack use IO in my `loggingOrvilleExSelect` function and how can I make a custom instance for AppDebugSql that prints out the sql in `runningQuery`?
 
-  print @[String] =<< (flip runReaderT dbPool . runApp . runAppDebugSql $ do
-                           loggingOrvilleExSelect)
+  print @[String] =<< (flip runReaderT dbPool .  runApp $ do
+                           -- withTransaction loggingOrvilleExSelect)
+                          env <- getOrvilleEnv
+                          runOrville (_ loggingOrvilleExSelect) env
+                          )
 
 -- experiments farther below if interested
 

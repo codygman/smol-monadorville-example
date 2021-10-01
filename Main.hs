@@ -64,11 +64,23 @@ instance MonadOrville HDBC.Connection (AppDebugSql (App (Pool HDBC.Connection) I
 main :: IO ()
 main = do
   dbPool  <- liftIO $ createPool (HDBC.connectPostgreSQL  "postgresql://postgres@localhost:5432" ) HDBC.disconnect 1 60 1
-  void . flip runReaderT dbPool .  runApp . runAppDebugSql $ do
+  void . flip runReaderT dbPool .  runApp . runAppDebugSql $
     loggingOrvilleExSelect
+  void . flip runReaderT dbPool .  runApp  $
+    orvilleExSelect
+  -- This one is surprising to me
+  void . flip runReaderT dbPool .  runApp  . runAppDebugSql . AppDebugSql $ do
+    orvilleExSelect
 
 loggingOrvilleExSelect :: AppDebugSql (App (Pool HDBC.Connection) IO) [String]
 loggingOrvilleExSelect = do
+    selectSql @String
+      "select aggnumdirectargs from pg_catalog.pg_aggregate pa limit 2;"
+      []
+      (col @Text.Text "aggnumdirectargs")
+
+orvilleExSelect :: App (Pool HDBC.Connection) IO [String]
+orvilleExSelect = do
     selectSql @String
       "select aggnumdirectargs from pg_catalog.pg_aggregate pa limit 2;"
       []

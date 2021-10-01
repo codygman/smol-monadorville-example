@@ -64,13 +64,33 @@ instance MonadOrville HDBC.Connection (AppDebugSql (App (Pool HDBC.Connection) I
 main :: IO ()
 main = do
   dbPool  <- liftIO $ createPool (HDBC.connectPostgreSQL  "postgresql://postgres@localhost:5432" ) HDBC.disconnect 1 60 1
-  void . flip runReaderT dbPool .  runApp . runAppDebugSql $
-    loggingOrvilleExSelect
+
+  putStrLn "1. non-logging"
   void . flip runReaderT dbPool .  runApp  $
     orvilleExSelect
+
+  putStrLn "2. logging"
+  void . flip runReaderT dbPool .  runApp . runAppDebugSql $
+    loggingOrvilleExSelect
+
   -- This one is surprising to me
+  putStrLn "3. think I can \"wrap\" App (Pool ...) IO [String] to change typeclass selected and get logging behavior"
   void . flip runReaderT dbPool .  runApp  . runAppDebugSql . AppDebugSql $ do
     orvilleExSelect
+
+  putStrLn "4. inline selectSql call, use runApp to select non-logging MonadOrville instance"
+  void . flip runReaderT dbPool .  runApp $ do
+    selectSql @String
+      "select aggnumdirectargs from pg_catalog.pg_aggregate pa limit 2;"
+      []
+      (col @Text.Text "aggnumdirectargs")
+
+  putStrLn "4. inline selectSql call, use runApp to select logging MonadOrville instance"
+  void . flip runReaderT dbPool .  runApp . runAppDebugSql $ do
+    selectSql @String
+      "select aggnumdirectargs from pg_catalog.pg_aggregate pa limit 2;"
+      []
+      (col @Text.Text "aggnumdirectargs")
 
 loggingOrvilleExSelect :: AppDebugSql (App (Pool HDBC.Connection) IO) [String]
 loggingOrvilleExSelect = do

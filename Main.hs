@@ -76,8 +76,8 @@ main = do
   putStrLn ""
 
   -- This one is surprising to me
-  putStrLn "3. think I can \"wrap\" App (Pool ...) IO [String] to change typeclass selected and get logging behavior. I expected `instance 3` but it used the default MonadOrville instance"
-  void . flip runReaderT dbPool .  runApp  . runAppDebugSql . pure $ do
+  putStrLn "3. think I can \"wrap\" App (Pool ...) IO [String] to change typeclass selected and get logging behavior. I expected `instance 3` but it used `instance 1`. Why?"
+  void . flip runReaderT dbPool .  runApp  . runAppDebugSql . AppDebugSql $ do
     orvilleExSelect
   putStrLn ""
 
